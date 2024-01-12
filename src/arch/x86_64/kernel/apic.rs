@@ -710,8 +710,8 @@ pub fn boot_application_processors() {
 	if crate::kernel::is_uefi() {
 		// Currently, this does NOT work as intended, this only supports one core
 		let length = BasePageSize::SIZE as usize;
-		let phys_addr: PhysAddr = crate::arch::mm::physicalmem::allocate(length).unwrap();
-
+		//let phys_addr: PhysAddr = crate::arch::mm::physicalmem::allocate(length).unwrap();
+		let phys_addr = PhysAddr(0x150c000);
 		let mut flags = PageTableEntryFlags::empty();
 		flags.normal().writable();
 		debug!(
@@ -742,7 +742,14 @@ pub fn boot_application_processors() {
 			smp_boot_code.len(),
 		);
 	}
+	//THIS IS FOR DEBUGGING ONLY
+	unsafe{
+	let pt = crate::arch::mm::paging::identity_mapped_page_table();
+	crate::arch::mm::paging::disect(pt, x86_64::VirtAddr::new(0x8000));
 
+	crate::arch::mm::paging::print_specific_pagetable(0, 0, Some(0), None);
+	}
+	//unsafe{crate::arch::mm::paging::print_page_tables(4);}
 	unsafe {
 		// Pass the PML4 page table address to the boot code.
 		*((SMP_BOOT_CODE_ADDRESS + SMP_BOOT_CODE_OFFSET_PML4).as_mut_ptr::<u32>()) =
