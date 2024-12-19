@@ -241,6 +241,26 @@ where
 	Ok(())
 }
 
+pub fn map_sev<S>(virt_addr: x86_64::VirtAddr) -> Result<(), i32>
+where 
+	S: PageSize + Debug,
+	OffsetPageTable<'static>: Mapper<S>,
+	RecursivePageTable<'static>: Mapper<S>,
+{
+	let old_flags = {
+		let mut flags = PageTableEntryFlags::empty();
+		flags.normal().writable(); //explicitly NO C-Bit!! 
+		flags
+	};
+
+
+	let phys_addr = physicalmem::allocate_aligned(S::SIZE as usize, BasePageSize::SIZE as usize).map_err(|_| -1)?;
+	map::<S>( memory_addresses::VirtAddr::new(virt_addr.as_u64()), phys_addr, 1, old_flags);
+
+
+	Ok(())
+}
+
 #[cfg(feature = "acpi")]
 pub fn identity_map<S>(frame: PhysFrame<S>)
 where

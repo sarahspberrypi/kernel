@@ -17,6 +17,7 @@ pub mod acpi;
 pub mod apic;
 pub mod core_local;
 pub mod gdt;
+pub mod ghcb;
 pub mod interrupts;
 #[cfg(all(not(feature = "pci"), any(feature = "tcp", feature = "udp")))]
 pub mod mmio;
@@ -159,6 +160,7 @@ pub fn boot_processor_init() {
 
 	crate::mm::init();
 	crate::mm::print_information();
+	ghcb::init();
 	CoreLocal::get().add_irq_counter();
 	env::init();
 	gdt::add_current_core();
