@@ -168,6 +168,9 @@ memory_addresses = { version = "0.2.2", default-features = false, features = [
   "conv-x86_64",
 ] }
 
+[patch.crates-io]
+x86_64 = { path = "/home/simon/hermit/x86_64" }
+
 [target.'cfg(target_arch = "aarch64")'.dependencies]
 aarch64 = { version = "0.0.13", default-features = false }
 arm-gic = { version = "0.1" }
