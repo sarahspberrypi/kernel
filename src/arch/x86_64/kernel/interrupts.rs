@@ -440,8 +440,27 @@ extern "x86-interrupt" fn simd_floating_point_exception(stack_frame: ExceptionSt
 
 extern "x86-interrupt" fn virtualization_exception(stack_frame: ExceptionStackFrame) {
 	swapgs(&stack_frame);
-	error!("Virtualization (#VE) Exception: {:#?}", stack_frame);
+	panic_println!("Virtualization (#VE) Exception: {:#?}", stack_frame);
 	scheduler::abort();
+}
+
+extern "x86-interrupt" fn vmm_communication_exception(stack_frame: ExceptionStackFrame, code: u64) {
+	swapgs(&stack_frame);
+	match code {
+		0x7b => {
+			let addr = (*stack_frame).instruction_pointer;
+			ghcb::make_page_shared(addr);
+			unsafe {
+				ghcb::vmgexit_msr(0x403, code, 0);//TODO: what response?
+				// *stack_frame.instruction_pointer.as_mut_ptr::<u64>().as_mut().unwrap() += 2u64 // jump to next instruction, replace with assembly code
+			} 
+		},
+		_ => {
+			panic_println!("Unhandled #VC error {code:#x}");
+			scheduler::abort();
+		},
+	}
+	
 }
 
 pub(crate) fn add_irq_name(irq_number: u8, name: &'static str) {
