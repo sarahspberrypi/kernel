@@ -170,7 +170,6 @@ pub fn boot_processor_init() {
 	unsafe {
 		trace!("Cr0: {:#x}, Cr4: {:#x}", cr0(), cr4());
 	}
-	interrupts::install();
 	systemtime::init();
 
 	if is_uhyve_with_pci() || !is_uhyve() {

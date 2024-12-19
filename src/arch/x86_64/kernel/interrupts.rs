@@ -1,5 +1,9 @@
 use alloc::collections::BTreeMap;
+use x86_64::instructions::interrupts;
+use x86_64::instructions::tables::sidt;
+use x86_64::structures::DescriptorTablePointer;
 use core::arch::asm;
+use core::slice;
 use core::ptr;
 use core::sync::atomic::{AtomicU64, Ordering};
 
@@ -39,7 +43,105 @@ pub(crate) fn load_idt() {
 	// modified or destroyed while in use. This is _not_ the case here. Instead, we
 	// disable interrupts on the current core when modifying the table and hope for
 	// the best in regards to interrupts on other cores.
+	
+	x86_64::instructions::interrupts::disable();
+	let enabled = interrupts::are_enabled();
+	debug!("are interrupts enabled? {enabled:}");
+
 	unsafe {
+		let current_idt = sidt();
+		let current_idt_entry: *const u64 = current_idt.base.as_ptr();
+		let base: InterruptDescriptorTable = core::ptr::read_unaligned(current_idt.base.as_ptr());
+		// debug!("base at {:#x?}, entry at {current_idt_entry:x?}", base);
+		// let bytes = slice::from_raw_parts(current_idt_entry, 32);
+		let cur_idt= current_idt.base.as_mut_ptr::<InterruptDescriptorTable>();
+		
+		
+		let uefi_ir29 = (*cur_idt).vmm_communication_exception.handler_addr();
+		debug!("uefi ir 29 is {uefi_ir29:#x?}");
+		debug!("setting handler");
+		let mut idt = IDT.lock();
+
+		set_general_handler!(&mut *idt, abort, 0..29);
+		set_general_handler!(&mut *idt, abort, 30..32);
+		set_general_handler!(&mut *idt, handle_interrupt, 32..);
+
+		for i in 32..=255 {
+			let addr = idt[i].handler_addr();
+			idt[i].set_handler_addr(addr).set_stack_index(0);
+		}
+		// idt.vmm_communication_exception.set_handler_addr(uefi_ir29).set_stack_index(0);
+		idt.vmm_communication_exception.set_handler_fn(vmm_communication_exception).set_stack_index(0);
+		idt.divide_error
+			.set_handler_fn(divide_error_exception)
+			.set_stack_index(0);
+		idt.debug.set_handler_fn(debug_exception).set_stack_index(0);
+		idt.breakpoint
+			.set_handler_fn(breakpoint_exception)
+			.set_stack_index(0);
+		idt.overflow
+			.set_handler_fn(overflow_exception)
+			.set_stack_index(0);
+		idt.bound_range_exceeded
+			.set_handler_fn(bound_range_exceeded_exception)
+			.set_stack_index(0);
+		idt.invalid_opcode
+			.set_handler_fn(invalid_opcode_exception)
+			.set_stack_index(0);
+		idt.device_not_available
+			.set_handler_fn(device_not_available_exception)
+			.set_stack_index(0);
+		idt.invalid_tss
+			.set_handler_fn(invalid_tss_exception)
+			.set_stack_index(0);
+		idt.segment_not_present
+			.set_handler_fn(segment_not_present_exception)
+			.set_stack_index(0);
+		idt.stack_segment_fault
+			.set_handler_fn(stack_segment_fault_exception)
+			.set_stack_index(0);
+		idt.general_protection_fault
+			.set_handler_fn(general_protection_exception)
+			.set_stack_index(0);
+		idt.page_fault
+			.set_handler_fn(page_fault_handler)
+			.set_stack_index(0);
+		idt.x87_floating_point
+			.set_handler_fn(floating_point_exception)
+			.set_stack_index(0);
+		idt.alignment_check
+			.set_handler_fn(alignment_check_exception)
+			.set_stack_index(0);
+		idt.simd_floating_point
+			.set_handler_fn(simd_floating_point_exception)
+			.set_stack_index(0);
+		idt.virtualization
+			.set_handler_fn(virtualization_exception)
+			.set_stack_index(0);
+		idt.double_fault
+			.set_handler_fn(double_fault_exception)
+			.set_stack_index(1);
+		idt.non_maskable_interrupt
+			.set_handler_fn(nmi_exception)
+			.set_stack_index(2);
+		idt.machine_check
+			.set_handler_fn(machine_check_exception)
+			.set_stack_index(3);
+		idt.device_not_available
+			.set_handler_fn(device_not_available_exception)
+			.set_stack_index(0);
+		idt.reserved_1
+			.set_handler_fn(debug_exception)
+			.set_stack_index(0);
+		for i in 0..6 {
+			idt.reserved_2[i]
+				.set_handler_fn(debug_exception)
+				.set_stack_index(0);
+		}
+		idt.reserved_3
+			.set_handler_fn(debug_exception)
+			.set_stack_index(0);
+		
 		(*IDT.data_ptr()).load_unsafe();
 	}
 }
