@@ -225,7 +225,8 @@ where
 {
 	let flags = {
 		let mut flags = PageTableEntryFlags::empty();
-		flags.normal().writable().execute_disable();
+		flags.normal().writable().execute_disable().c_bit(); //SEV
+		// flags.normal().writable().execute_disable(); //non SEV
 		flags
 	};
 

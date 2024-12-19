@@ -20,8 +20,8 @@ use crate::config::KERNEL_STACK_SIZE;
 
 pub fn add_current_core() {
 	let gdt: &mut GlobalDescriptorTable = Box::leak(Box::new(GlobalDescriptorTable::new()));
-	let kernel_code_selector = gdt.append(Descriptor::kernel_code_segment());
-	let kernel_data_selector = gdt.append(Descriptor::kernel_data_segment());
+	// let kernel_code_selector = gdt.append(Descriptor::kernel_code_segment());
+	// let kernel_data_selector = gdt.append(Descriptor::kernel_data_segment());
 	#[cfg(feature = "common-os")]
 	{
 		let _user_code32_selector =
@@ -57,7 +57,18 @@ pub fn add_current_core() {
 	}
 
 	CoreLocal::get().tss.set(tss);
+	/// Dinge, die mir aufgefallen sind:
+	 /// Kernelcode nicht vor Kerneldata???
+	 /// GDT darf nicht leer sein
+	 /// Reihenfolge ist vielleicht wichtig???
+	 /// aus mir unbekannten Gründen geht das
+		
+	gdt.append(Descriptor::UserSegment(0xcf92000000ffff));
+	gdt.append(Descriptor::UserSegment(0xcf9f000000ffff));
 	let tss_selector = gdt.append(Descriptor::tss_segment(tss));
+	gdt.append(Descriptor::UserSegment(0x8f9a000000ffff));
+	let kernel_data_selector = gdt.append(Descriptor::kernel_data_segment());
+	let kernel_code_selector = gdt.append(Descriptor::kernel_code_segment());
 
 	// Load the GDT for the current core.
 	gdt.load();

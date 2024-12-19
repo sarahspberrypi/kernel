@@ -801,7 +801,7 @@ pub fn configure() {
 	cr0.remove(Cr0::CR0_EMULATE_COPROCESSOR);
 
 	// if set, the first FPU access will trigger interrupt 7.
-	cr0.insert(Cr0::CR0_TASK_SWITCHED);
+	// cr0.insert(Cr0::CR0_TASK_SWITCHED); // currently not set because there is no working NMI handling yet with SEV
 
 	// Prevent writes to read-only pages in Ring 0.
 	cr0.insert(Cr0::CR0_WRITE_PROTECT);
