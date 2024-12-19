@@ -300,13 +300,34 @@ pub(crate) extern "x86-interrupt" fn page_fault_handler(
 	stack_frame: ExceptionStackFrame,
 	error_code: PageFaultErrorCode,
 ) {
-	error!("Page fault (#PF)!");
-	error!("page_fault_linear_address = {:p}", Cr2::read().unwrap());
-	error!("error_code = {error_code:?}");
-	error!("fs = {:#X}", processor::readfs());
-	error!("gs = {:#X}", processor::readgs());
-	error!("stack_frame = {stack_frame:#?}");
-	scheduler::abort();
+	// panic_println!("Page fault (#PF)!");
+	// panic_println!("Error Code addr: {:p}", &error_code);
+	// panic_println!("page_fault_linear_address = {:p}", Cr2::read().unwrap());
+	// panic_println!("error_code = {error_code:?}");
+	// panic_println!("fs = {:#X}", processor::readfs());
+	// panic_println!("gs = {:#X}", processor::readgs());
+	panic_println!("stack_frame = {stack_frame:#?}");
+	// scheduler::abort();
+	panic_println!("Page fault (#PF)!");
+	let addr = Cr2::read().unwrap();
+	unsafe {
+		let pt = crate::arch::mm::paging::identity_mapped_page_table();
+		match pt.translate(addr) {
+			TranslateResult::InvalidFrameAddress(_) => {
+				panic_println!("Pagefault at {addr:#x}: InvalidFrameAddress");
+			}
+			TranslateResult::NotMapped => {
+				panic_println!("Pagefault at {addr:#x}: PageNotMapped");
+			}
+			TranslateResult::Mapped { frame, offset, flags } => {
+				panic_println!(
+					"Pagefault at {addr:#x}, mapped to {:#x} with flags {flags:?}",
+					frame.start_address()
+				);
+			}
+		}
+		scheduler::abort();
+	}
 }
 
 #[cfg(feature = "common-os")]

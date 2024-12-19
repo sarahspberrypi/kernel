@@ -293,51 +293,51 @@ fn handle_interrupt(stack_frame: ExceptionStackFrame, index: u8, _error_code: Op
 }
 
 fn abort(stack_frame: ExceptionStackFrame, index: u8, error_code: Option<u64>) {
-	error!("Exception {index}");
-	error!("Error code: {error_code:?}");
-	error!("Stack frame: {stack_frame:#?}");
+	panic_println!("Exception {index}");
+	panic_println!("Error code: {error_code:?}");
+	panic_println!("Stack frame: {stack_frame:#?}");
 	scheduler::abort();
 }
 
 extern "x86-interrupt" fn divide_error_exception(stack_frame: ExceptionStackFrame) {
 	swapgs(&stack_frame);
-	error!("Divide Error (#DE) Exception: {:#?}", stack_frame);
+	panic_println!("Divide Error (#DE) Exception: {:#?}", stack_frame);
 	scheduler::abort();
 }
 
 extern "x86-interrupt" fn debug_exception(stack_frame: ExceptionStackFrame) {
 	swapgs(&stack_frame);
-	error!("Debug (#DB) Exception: {:#?}", stack_frame);
+	panic_println!("Debug (#DB) Exception: {:#?}", stack_frame);
 	scheduler::abort();
 }
 
 extern "x86-interrupt" fn nmi_exception(stack_frame: ExceptionStackFrame) {
 	swapgs(&stack_frame);
-	error!("Non-Maskable Interrupt (NMI) Exception: {:#?}", stack_frame);
+	panic_println!("Non-Maskable Interrupt (NMI) Exception: {:#?}", stack_frame);
 	scheduler::abort();
 }
 
 extern "x86-interrupt" fn breakpoint_exception(stack_frame: ExceptionStackFrame) {
 	swapgs(&stack_frame);
-	error!("Breakpoint (#BP) Exception: {:#?}", stack_frame);
+	panic_println!("Breakpoint (#BP) Exception: {:#?}", stack_frame);
 	scheduler::abort();
 }
 
 extern "x86-interrupt" fn overflow_exception(stack_frame: ExceptionStackFrame) {
 	swapgs(&stack_frame);
-	error!("Overflow (#OF) Exception: {:#?}", stack_frame);
+	panic_println!("Overflow (#OF) Exception: {:#?}", stack_frame);
 	scheduler::abort();
 }
 
 extern "x86-interrupt" fn bound_range_exceeded_exception(stack_frame: ExceptionStackFrame) {
 	swapgs(&stack_frame);
-	error!("BOUND Range Exceeded (#BR) Exception: {:#?}", stack_frame);
+	panic_println!("BOUND Range Exceeded (#BR) Exception: {:#?}", stack_frame);
 	scheduler::abort();
 }
 
 extern "x86-interrupt" fn invalid_opcode_exception(stack_frame: ExceptionStackFrame) {
 	swapgs(&stack_frame);
-	error!("Invalid Opcode (#UD) Exception: {:#?}", stack_frame);
+	panic_println!("Invalid Opcode (#UD) Exception: {:#?}", stack_frame);
 	scheduler::abort();
 }
 
@@ -360,7 +360,7 @@ extern "x86-interrupt" fn device_not_available_exception(stack_frame: ExceptionS
 
 extern "x86-interrupt" fn invalid_tss_exception(stack_frame: ExceptionStackFrame, _code: u64) {
 	swapgs(&stack_frame);
-	error!("Invalid TSS (#TS) Exception: {:#?}", stack_frame);
+	panic_println!("Invalid TSS (#TS) Exception: {:#?}", stack_frame);
 	scheduler::abort();
 }
 
@@ -369,7 +369,7 @@ extern "x86-interrupt" fn segment_not_present_exception(
 	_code: u64,
 ) {
 	swapgs(&stack_frame);
-	error!("Segment Not Present (#NP) Exception: {:#?}", stack_frame);
+	panic_println!("Segment Not Present (#NP) Exception: {:#?}", stack_frame);
 	scheduler::abort();
 }
 
@@ -378,7 +378,7 @@ extern "x86-interrupt" fn stack_segment_fault_exception(
 	error_code: u64,
 ) {
 	swapgs(&stack_frame);
-	error!(
+	panic_println!(
 		"Stack Segment Fault (#SS) Exception: {:#?}, error {:#X}",
 		stack_frame, error_code
 	);
@@ -390,11 +390,11 @@ extern "x86-interrupt" fn general_protection_exception(
 	error_code: u64,
 ) {
 	swapgs(&stack_frame);
-	error!(
+	panic_println!(
 		"General Protection (#GP) Exception: {:#?}, error {:#X}",
 		stack_frame, error_code
 	);
-	error!(
+	panic_println!(
 		"fs = {:#X}, gs = {:#X}",
 		processor::readfs(),
 		processor::readgs()
@@ -407,7 +407,7 @@ extern "x86-interrupt" fn double_fault_exception(
 	error_code: u64,
 ) -> ! {
 	swapgs(&stack_frame);
-	error!(
+	panic_println!(
 		"Double Fault (#DF) Exception: {:#?}, error {:#X}",
 		stack_frame, error_code
 	);
@@ -416,25 +416,25 @@ extern "x86-interrupt" fn double_fault_exception(
 
 extern "x86-interrupt" fn floating_point_exception(stack_frame: ExceptionStackFrame) {
 	swapgs(&stack_frame);
-	error!("Floating-Point Error (#MF) Exception: {:#?}", stack_frame);
+	panic_println!("Floating-Point Error (#MF) Exception: {:#?}", stack_frame);
 	scheduler::abort();
 }
 
 extern "x86-interrupt" fn alignment_check_exception(stack_frame: ExceptionStackFrame, _code: u64) {
 	swapgs(&stack_frame);
-	error!("Alignment Check (#AC) Exception: {:#?}", stack_frame);
+	panic_println!("Alignment Check (#AC) Exception: {:#?}", stack_frame);
 	scheduler::abort();
 }
 
 extern "x86-interrupt" fn machine_check_exception(stack_frame: ExceptionStackFrame) -> ! {
 	swapgs(&stack_frame);
-	error!("Machine Check (#MC) Exception: {:#?}", stack_frame);
+	panic_println!("Machine Check (#MC) Exception: {:#?}", stack_frame);
 	scheduler::abort()
 }
 
 extern "x86-interrupt" fn simd_floating_point_exception(stack_frame: ExceptionStackFrame) {
 	swapgs(&stack_frame);
-	error!("SIMD Floating-Point (#XM) Exception: {:#?}", stack_frame);
+	panic_println!("SIMD Floating-Point (#XM) Exception: {:#?}", stack_frame);
 	scheduler::abort();
 }
 
