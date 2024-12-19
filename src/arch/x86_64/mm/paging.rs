@@ -32,6 +32,8 @@ pub trait PageTableEntryFlagsExt {
 
 	fn execute_disable(&mut self) -> &mut Self;
 
+	fn c_bit(&mut self) -> &mut Self;
+
 	#[cfg(feature = "common-os")]
 	fn execute_enable(&mut self) -> &mut Self;
 
@@ -66,6 +68,11 @@ impl PageTableEntryFlagsExt for PageTableEntryFlags {
 
 	fn execute_disable(&mut self) -> &mut Self {
 		self.insert(PageTableEntryFlags::NO_EXECUTE);
+		self
+	}
+
+	fn c_bit(&mut self) -> &mut Self {
+		self.insert(PageTableEntryFlags::C_BIT_51);
 		self
 	}
 
