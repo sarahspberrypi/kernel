@@ -32,7 +32,7 @@ impl GhcbMsr {
 }
 
 // GHCB Layout according to AMD SEV-ES Guest Hypervisor Communcation Block Standardization
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 #[repr(C, align(4096))]
 pub struct Ghcb {
     reserved1: [u8; 0xcb],
@@ -117,7 +117,36 @@ pub unsafe fn vmgexit_msr(request_code: u64, value: u64, response: u64) -> u64 {
     retcode
 }
 
-pub fn init() {
+pub unsafe fn read_msr() {
+    let mut msr = GhcbMsr::MSR;
+    let ret = msr.read();
+    debug!("msr is {ret:#b}");
+    // unsafe {
+    //     let pt = crate::arch::mm::paging::identity_mapped_page_table();
+    //     crate::arch::mm::paging::disect(pt, VirtAddr::new(ret >> 12));
+    //     crate::arch::mm::paging::print_page_tables(4);
+    // }
+    debug!("re-setting this msr");
+    let addr:*mut Ghcb = VirtAddr::new(ret >> 12).as_mut_ptr();
+    debug!("ghcb is {:x?}", *addr);
+    // make_page_shared(VirtAddr::new(ret >> 12).into());
+    // debug!("page shared");
+    // vmgexit_msr(GhcbMsr::GUEST_PHYS_ADDR_REQUEST, ret >> 12, GhcbMsr::GUEST_PHYS_ADDR_RESPONSE);
+    // debug!("success");
+}
+
+pub fn terminate() {
+    unsafe {
+        vmgexit_msr(GhcbMsr::EXIT_REQUEST, 0x0, 0);
+    }
+    debug!("you shouldn't be here");
+}
+
+pub unsafe fn init() {
+    let mut msr = GhcbMsr::MSR;
+    // let addr = VirtAddr::new(msr.read() >> 12);
+    
+    
     let addr = allocate_aligned(0x1000, 0x1000).unwrap();
     debug!("{addr:#x?}");
 
@@ -131,6 +160,10 @@ pub fn init() {
             panic_println!("unknown ghcb set");
             scheduler::abort();
         }
+    let mut ghcb = GHCB.lock();
+    let addr: *mut Ghcb = VirtAddr::new(msr.read() >> 12).as_mut_ptr();
+    *ghcb = *addr;
+
         
     }
 }
