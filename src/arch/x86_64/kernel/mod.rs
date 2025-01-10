@@ -159,11 +159,7 @@ pub fn boot_processor_init() {
 	}
 
 	crate::mm::init();
-	// unsafe {crate::arch::mm::paging::print_page_tables(3);}
-	// crate::mm::print_information();
-	interrupts::reload_old_idt();
-	unsafe {ghcb::read_msr()};
-	// ghcb::terminate();
+	crate::mm::print_information();
 	unsafe {ghcb::init()};
 	CoreLocal::get().add_irq_counter();
 	env::init();

@@ -1,6 +1,7 @@
 use core::arch::asm;
 use core::ptr;
 use hermit_sync::InterruptSpinMutex;
+use x86_64::instructions::hlt;
 use x86_64::registers::model_specific::Msr;
 use x86_64::{PhysAddr, VirtAddr};
 use x86_64::structures::paging::page::Size2MiB;
@@ -22,12 +23,19 @@ impl GhcbMsr {
 
     pub const EXIT_REQUEST: u64 = 0x100;
 
+    const GUEST_PHYS_ADDR: u64 = 0x000;
+    const SEV_INFORMATION: u64 = 0x001;
+    const SEV_INFORMATION_REQUEST: u64 = 0x002;
+    const CPUID_REQUEST: u64 = 0x004;
+    const CPUID_RESPONSE: u64 = 0x005;
+    const PREFERRED_GUEST_PHYS_ADDR_REQUEST: u64 = 0x010;
+    const PREFFERED_GUEST_PHYS_ADDR_RESPONSE: u64 = 0x011;
     const GUEST_PHYS_ADDR_REQUEST: u64 = 0x012;
     const GUEST_PHYS_ADDR_RESPONSE: u64 = 0x013;
     const PAGE_STATE_CHANGE_REQUEST: u64 = 0x014;
     const PAGE_STATE_CHANGE_RESPONSE: u64 = 0x015;
 
-    const PAGE_STATE_CHANGE_POS: u64 = 52;
+    const PAGE_STATE_CHANGE_POS: u64 = 52; // this bit can be set to 1 (private) or 2 (shared)
 
 }
 
@@ -63,7 +71,7 @@ pub struct Ghcb {
     ghcb_usage: u32,
 }
 
-pub(crate) static GHCB: InterruptSpinMutex<Ghcb> = InterruptSpinMutex::new(Ghcb::new());
+pub(crate) static GHCB: InterruptSpinMutex<Option<&mut Ghcb>> = InterruptSpinMutex::new(None); 
 
 
 impl Ghcb {
@@ -101,72 +109,52 @@ impl Ghcb {
 
 }
 
+// This function performs an exit to the hypervisor 
 #[inline(always)]
-pub unsafe fn vmgexit_msr(request_code: u64, value: u64, response: u64) -> u64 {
+pub unsafe fn vmgexit_msr(request_code: u64, data: u64, response: u64) -> u64 {
 
-    let val = request_code | value;
+    let val = request_code | data;
 
     let mut msr = GhcbMsr::MSR;
-    debug!("before assembly");
     msr.write(val);
-    
     asm!("rep vmmcall", options(nostack));
-    debug!("after assembly");
     let retcode = msr.read();
-    // TODO: Validate response
+
+    if retcode != response {
+        panic!("The returnvalue from the hypervisor {retcode:} does not match the expected value {response:}");
+    }
+
     retcode
 }
 
+// This function reads the address stored in the MSR which points to the GHCB and prints the address and the GHCB to the console.
 pub unsafe fn read_msr() {
     let mut msr = GhcbMsr::MSR;
     let ret = msr.read();
-    debug!("msr is {ret:#b}");
-    // unsafe {
-    //     let pt = crate::arch::mm::paging::identity_mapped_page_table();
-    //     crate::arch::mm::paging::disect(pt, VirtAddr::new(ret >> 12));
-    //     crate::arch::mm::paging::print_page_tables(4);
-    // }
-    debug!("re-setting this msr");
-    let addr:*mut Ghcb = VirtAddr::new(ret >> 12).as_mut_ptr();
+    debug!("msr is {ret:#x}");
+    let addr:*mut Ghcb = VirtAddr::new(ret).as_mut_ptr();
     debug!("ghcb is {:x?}", *addr);
-    // make_page_shared(VirtAddr::new(ret >> 12).into());
-    // debug!("page shared");
-    // vmgexit_msr(GhcbMsr::GUEST_PHYS_ADDR_REQUEST, ret >> 12, GhcbMsr::GUEST_PHYS_ADDR_RESPONSE);
-    // debug!("success");
 }
 
+// Sends a termination request to the MSR
 pub fn terminate() {
     unsafe {
         vmgexit_msr(GhcbMsr::EXIT_REQUEST, 0x0, 0);
     }
-    debug!("you shouldn't be here");
+    hlt();
 }
 
+// This function reads the address of the GHCB from the MSR and stores it inside a Mutex
 pub unsafe fn init() {
     let mut msr = GhcbMsr::MSR;
-    // let addr = VirtAddr::new(msr.read() >> 12);
-    
-    
-    let addr = allocate_aligned(0x1000, 0x1000).unwrap();
-    debug!("{addr:#x?}");
 
-    make_page_shared(addr.into());
-
-    unsafe {
-
-        let gpa = addr.as_u64();
-        let ret = vmgexit_msr(GhcbMsr::GUEST_PHYS_ADDR_REQUEST, gpa, GhcbMsr::GUEST_PHYS_ADDR_RESPONSE);
-        if ret != gpa {
-            panic_println!("unknown ghcb set");
-            scheduler::abort();
-        }
     let mut ghcb = GHCB.lock();
-    let addr: *mut Ghcb = VirtAddr::new(msr.read() >> 12).as_mut_ptr();
-    *ghcb = *addr;
+    let ghcb_ref = VirtAddr::new(msr.read()).as_mut_ptr::<Ghcb>().as_mut();
 
+    *ghcb = ghcb_ref;   
         
-    }
 }
+    
 
 pub fn make_page_shared(addr: x86_64::VirtAddr) {
     //TODO: validate page beforehand
