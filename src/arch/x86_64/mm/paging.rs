@@ -225,8 +225,7 @@ where
 {
 	let flags = {
 		let mut flags = PageTableEntryFlags::empty();
-		flags.normal().writable().execute_disable().c_bit(); //SEV
-		// flags.normal().writable().execute_disable(); //non SEV
+		flags.normal().writable().execute_disable(); //non SEV
 		flags
 	};
 
@@ -236,6 +235,34 @@ where
 		let phys_addr = physicalmem::allocate_aligned(S::SIZE as usize, S::SIZE as usize)
 			.map_err(|_| map_counter)?;
 		map::<S>(virt_addr, phys_addr, 1, flags);
+	}
+
+	Ok(())
+}
+
+/// Maps `count` pages at address `virt_addr`. If the allocation of a physical memory failed,
+/// the number of successful mapped pages are returned as error value.
+pub fn map_heap_sev<S>(virt_addr: VirtAddr, count: usize) -> Result<(), usize>
+where
+	S: PageSize + Debug,
+	RecursivePageTable<'static>: Mapper<S>,
+	OffsetPageTable<'static>: Mapper<S>,
+{
+	let flags = {
+		let mut flags = PageTableEntryFlags::empty();
+		flags.normal().writable().execute_disable().c_bit(); //SEV
+		flags
+	};
+
+	let virt_addrs = (0..count).map(|n| virt_addr + n as u64 * S::SIZE);
+
+	for (map_counter, virt_addr) in virt_addrs.enumerate() {
+		let phys_addr = memory_addresses::PhysAddr::new(virt_addr.as_u64());
+		map::<S>(virt_addr, phys_addr, 1, flags);
+		unsafe {
+			let pt = identity_mapped_page_table();
+			disect(pt, virt_addr.into());
+		}
 	}
 
 	Ok(())

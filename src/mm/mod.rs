@@ -207,7 +207,7 @@ pub(crate) fn init() {
 	{
 		let size = map_size.align_down(LargePageSize::SIZE as usize);
 		if let Err(num_pages) =
-			paging::map_heap::<LargePageSize>(map_addr, size / LargePageSize::SIZE as usize)
+			paging::map_heap_sev::<LargePageSize>(map_addr, size / LargePageSize::SIZE as usize)
 		{
 			map_size -= num_pages * LargePageSize::SIZE as usize;
 			map_addr += num_pages as u64 * LargePageSize::SIZE;
