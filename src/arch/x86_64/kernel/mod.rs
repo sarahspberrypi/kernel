@@ -160,10 +160,10 @@ pub fn boot_processor_init() {
 
 	crate::mm::init();
 	crate::mm::print_information();
-	unsafe {ghcb::init()};
 	CoreLocal::get().add_irq_counter();
 	env::init();
 	gdt::add_current_core();
+	unsafe {ghcb::init()};
 	interrupts::load_idt();
 	pic::init();
 

@@ -39,6 +39,9 @@ pub(crate) const IST_SIZE: usize = 8 * BasePageSize::SIZE as usize;
 pub(crate) static IDT: InterruptSpinMutex<InterruptDescriptorTable> =
 	InterruptSpinMutex::new(InterruptDescriptorTable::new());
 
+/// In this instance, loading an empty IDT leads to crashing, 
+/// so for now, the IDT gets populated and loaded directly.
+/// For SEV, we have to use the UEFI #VC handler (for now) because changing it breaks the loading process
 pub(crate) fn load_idt() {
 	// FIXME: This is not sound! For this to be sound, the table must never be
 	// modified or destroyed while in use. This is _not_ the case here. Instead, we
@@ -57,10 +60,8 @@ pub(crate) fn load_idt() {
 		// let bytes = slice::from_raw_parts(current_idt_entry, 32);
 		let cur_idt= current_idt.base.as_mut_ptr::<InterruptDescriptorTable>();
 		
-		
+		// retrieve the UEFI #VC handler to write it back into our own IDT
 		let uefi_ir29 = (*cur_idt).vmm_communication_exception.handler_addr();
-		debug!("uefi ir 29 is {uefi_ir29:#x?}");
-		debug!("setting handler");
 		let mut idt = IDT.lock();
 
 		set_general_handler!(&mut *idt, abort, 0..29);
@@ -71,54 +72,39 @@ pub(crate) fn load_idt() {
 			let addr = idt[i].handler_addr();
 			idt[i].set_handler_addr(addr).set_stack_index(0);
 		}
-		// idt.vmm_communication_exception.set_handler_addr(uefi_ir29).set_stack_index(0);
-		idt.vmm_communication_exception.set_handler_fn(vmm_communication_exception).set_stack_index(0);
+		idt.vmm_communication_exception.set_handler_addr(uefi_ir29); // we can just use the #VC handler provided by UEFI
 		idt.divide_error
 			.set_handler_fn(divide_error_exception)
 			.set_stack_index(0);
-		idt.debug.set_handler_fn(debug_exception).set_stack_index(0);
+		idt.debug.set_handler_fn(debug_exception);
 		idt.breakpoint
-			.set_handler_fn(breakpoint_exception)
-			.set_stack_index(0);
+			.set_handler_fn(breakpoint_exception);
 		idt.overflow
-			.set_handler_fn(overflow_exception)
-			.set_stack_index(0);
+			.set_handler_fn(overflow_exception);
 		idt.bound_range_exceeded
-			.set_handler_fn(bound_range_exceeded_exception)
-			.set_stack_index(0);
+			.set_handler_fn(bound_range_exceeded_exception);
 		idt.invalid_opcode
-			.set_handler_fn(invalid_opcode_exception)
-			.set_stack_index(0);
+			.set_handler_fn(invalid_opcode_exception);
 		idt.device_not_available
-			.set_handler_fn(device_not_available_exception)
-			.set_stack_index(0);
+			.set_handler_fn(device_not_available_exception);
 		idt.invalid_tss
-			.set_handler_fn(invalid_tss_exception)
-			.set_stack_index(0);
+			.set_handler_fn(invalid_tss_exception);
 		idt.segment_not_present
-			.set_handler_fn(segment_not_present_exception)
-			.set_stack_index(0);
+			.set_handler_fn(segment_not_present_exception);
 		idt.stack_segment_fault
-			.set_handler_fn(stack_segment_fault_exception)
-			.set_stack_index(0);
+			.set_handler_fn(stack_segment_fault_exception);
 		idt.general_protection_fault
-			.set_handler_fn(general_protection_exception)
-			.set_stack_index(0);
+			.set_handler_fn(general_protection_exception);
 		idt.page_fault
-			.set_handler_fn(page_fault_handler)
-			.set_stack_index(0);
+			.set_handler_fn(page_fault_handler);
 		idt.x87_floating_point
-			.set_handler_fn(floating_point_exception)
-			.set_stack_index(0);
+			.set_handler_fn(floating_point_exception);
 		idt.alignment_check
-			.set_handler_fn(alignment_check_exception)
-			.set_stack_index(0);
+			.set_handler_fn(alignment_check_exception);
 		idt.simd_floating_point
-			.set_handler_fn(simd_floating_point_exception)
-			.set_stack_index(0);
+			.set_handler_fn(simd_floating_point_exception);
 		idt.virtualization
-			.set_handler_fn(virtualization_exception)
-			.set_stack_index(0);
+			.set_handler_fn(virtualization_exception);
 		idt.double_fault
 			.set_handler_fn(double_fault_exception)
 			.set_stack_index(1);
@@ -129,19 +115,15 @@ pub(crate) fn load_idt() {
 			.set_handler_fn(machine_check_exception)
 			.set_stack_index(3);
 		idt.device_not_available
-			.set_handler_fn(device_not_available_exception)
-			.set_stack_index(0);
+			.set_handler_fn(device_not_available_exception);
 		idt.reserved_1
-			.set_handler_fn(debug_exception)
-			.set_stack_index(0);
+			.set_handler_fn(debug_exception);
 		for i in 0..6 {
 			idt.reserved_2[i]
-				.set_handler_fn(debug_exception)
-				.set_stack_index(0);
+				.set_handler_fn(debug_exception);
 		}
 		idt.reserved_3
-			.set_handler_fn(debug_exception)
-			.set_stack_index(0);
+			.set_handler_fn(debug_exception);
 		
 		(*IDT.data_ptr()).load_unsafe();
 	}
