@@ -18,6 +18,7 @@ pub mod apic;
 pub mod core_local;
 pub mod gdt;
 pub mod ghcb;
+pub mod attestation;
 pub mod interrupts;
 #[cfg(all(not(feature = "pci"), any(feature = "tcp", feature = "udp")))]
 pub mod mmio;
@@ -169,6 +170,8 @@ pub fn boot_processor_init() {
 
 	processor::detect_frequency();
 	processor::print_information();
+	// debug!("requestion attestation");
+	attestation::request_attestation();
 	unsafe {
 		trace!("Cr0: {:#x}, Cr4: {:#x}", cr0(), cr4());
 	}

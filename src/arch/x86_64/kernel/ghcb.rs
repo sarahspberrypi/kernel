@@ -1,14 +1,16 @@
 use core::arch::asm;
-use core::ptr;
+use core::ptr::{self, from_mut};
 use hermit_sync::InterruptSpinMutex;
 use x86_64::instructions::hlt;
 use x86_64::registers::model_specific::Msr;
+use x86_64::registers::rflags::{self, RFlags};
+use x86_64::structures::paging::{PageSize, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
-use x86_64::structures::paging::page::Size2MiB;
+use x86_64::structures::paging::page::{NotGiantPageSize, Size2MiB, Size1GiB};
 
 use crate::scheduler;
 use crate::arch::mm::virtualmem::allocate_aligned;
-use crate::arch::mm::paging::map_sev;
+use crate::arch::mm::paging::{disect, map_sev};
 
 
 
@@ -50,22 +52,22 @@ pub struct Ghcb {
     reserved3: [u8; 0x18],
     dr7: u64,
     reserved4: [u8; 0x90],
-    rax: u64,
+    pub rax: u64,
     reserved5: [u8; 0x108],
-    rcx: u64,
-    rdx: u64,
-    rbx: u64,
+    pub rcx: u64,
+    pub rdx: u64,
+    pub rbx: u64,
     reserved6: [u8; 0x70],
-    sw_exitcode: u64,
-    sw_exitinfo1: u64,
-    sw_exitinfo2: u64,
+    pub sw_exitcode: u64,
+    pub sw_exitinfo1: u64,
+    pub sw_exitinfo2: u64,
     sw_scratch: u64,
     reserved7: [u8; 0x38],
     xcr0: u64,
     valid_bitmap: [u8; 0x10],
     x87_state_gpa: u64,
     reserved8: [u8; 0x3f8],
-    shared_buffer: [u8; 0x7f0],
+    pub shared_buffer: [u8; 0x7f0],
     reserved9: [u8; 0xa],
     protocol_version: u16,
     ghcb_usage: u32,
@@ -109,7 +111,7 @@ impl Ghcb {
 
 }
 
-// This function performs an exit to the hypervisor 
+// This function performs an exit to the hypervisor via MSR
 #[inline(always)]
 pub unsafe fn vmgexit_msr(request_code: u64, data: u64, response: u64) -> u64 {
 
@@ -117,6 +119,11 @@ pub unsafe fn vmgexit_msr(request_code: u64, data: u64, response: u64) -> u64 {
 
     let mut msr = GhcbMsr::MSR;
     msr.write(val);
+
+    // unsafe {
+    //     core::arch::asm!("out dx, al", in("dx") 0x3f8, in("al") b'a', options(nomem, nostack, preserves_flags));
+    //     core::arch::asm!("out dx, al", in("dx") 0x3f8, in("al") b'\n', options(nomem, nostack, preserves_flags));
+    // }
     asm!("rep vmmcall", options(nostack));
     let retcode = msr.read();
 
@@ -131,35 +138,65 @@ pub unsafe fn vmgexit_msr(request_code: u64, data: u64, response: u64) -> u64 {
 pub unsafe fn read_msr() {
     let mut msr = GhcbMsr::MSR;
     let ret = msr.read();
-    debug!("msr is {ret:#x}");
+    // debug!("msr is {ret:#x}");
     let addr:*mut Ghcb = VirtAddr::new(ret).as_mut_ptr();
-    debug!("ghcb is {:x?}", *addr);
+    let pt = crate::arch::mm::paging::identity_mapped_page_table();
+    // disect(pt, VirtAddr::new(ret));
+    // let ret = vmgexit_msr(GhcbMsr::CPUID_REQUEST, 0x8000001F40000000, GhcbMsr::CPUID_RESPONSE);
+    // debug!("ghcb is {:x?}", *addr);
+    debug!("ret is {ret:#x}")
 }
 
 // Sends a termination request to the MSR
 pub fn terminate() {
+    let data = 0x0 << 12 | 0x00 << 16;
     unsafe {
-        vmgexit_msr(GhcbMsr::EXIT_REQUEST, 0x0, 0);
+        vmgexit_msr(GhcbMsr::EXIT_REQUEST, data, 0);
     }
     hlt();
 }
 
 // This function reads the address of the GHCB from the MSR and stores it inside a Mutex
+// The address and everything has already been set up by the UEFI
 pub unsafe fn init() {
     let mut msr = GhcbMsr::MSR;
 
     let mut ghcb = GHCB.lock();
     let ghcb_ref = VirtAddr::new(msr.read()).as_mut_ptr::<Ghcb>().as_mut();
 
-    *ghcb = ghcb_ref;   
-        
+    *ghcb = ghcb_ref;  
+    debug!("ghcb: {:?}", *ghcb);
+
+}
+
+pub unsafe fn pvalidate(addr: VirtAddr, size: u64, validate: bool) -> Result<(), u64>{
+    let mut rflags: u64;
+    let mut ret;
+    let validation = validate as u64;
+    assert!(size < Size1GiB::SIZE); //we can only validate 2MiB and 4KiB pages
+    asm!(
+        "pvalidate", 
+        "setc    dl", // move carry bit
+        inout("rax") addr.as_u64() => ret, 
+        in("rcx") size, 
+        in("rdx") validation,
+        lateout("rdx") rflags,
+        options(nostack)
+    );
+
+
+
+    match ret {
+        0 => Ok(()),
+        _ => Err(ret)
+    }
 }
     
 
 pub fn make_page_shared(addr: x86_64::VirtAddr) {
-    //TODO: validate page beforehand
+    unsafe {pvalidate(addr, Size4KiB::SIZE, true);}
     debug!("making page shared");
-    if map_sev::<Size2MiB>(addr).is_err() {
+    if map_sev::<Size4KiB>(addr).is_err() {
         panic_println!("Cannot make page shared!");
         scheduler::abort();
     }
@@ -176,8 +213,8 @@ pub fn make_page_shared(addr: x86_64::VirtAddr) {
 
 pub fn make_page_private(addr: VirtAddr) {
     //TODO: validate page beforehand
-
-    if map_sev::<Size2MiB>(addr).is_err() {
+    unsafe {pvalidate(addr, Size4KiB::SIZE, true);}
+    if map_sev::<Size4KiB>(addr).is_err() {
         panic_println!("Cannot make page shared!");
         scheduler::abort();
     }
@@ -189,4 +226,19 @@ pub fn make_page_private(addr: VirtAddr) {
     unsafe {
         let ret = vmgexit_msr(GhcbMsr::PAGE_STATE_CHANGE_REQUEST, value, GhcbMsr::PAGE_STATE_CHANGE_RESPONSE);
     }
+}
+
+pub unsafe fn vmgexit(sw_exitcode: u64, sw_exitinfo1: u64, sw_exitinfo2: u64) {
+    let mut guard = GHCB.lock();
+    let ghcb = guard.as_mut().unwrap();
+    ghcb.sw_exitcode = sw_exitcode;
+    ghcb.sw_exitinfo1 = sw_exitinfo1;
+    ghcb.sw_exitinfo2 = sw_exitinfo2;
+    ghcb.protocol_version = 2;
+    ghcb.ghcb_usage = 0; 
+    let mut msr = GhcbMsr::MSR;
+    let addr = from_mut(ghcb) as u64;
+    debug!("addr of ghcb: {addr}");
+    msr.write(addr);
+    asm!("rep vmmcall", options(nostack));
 }
